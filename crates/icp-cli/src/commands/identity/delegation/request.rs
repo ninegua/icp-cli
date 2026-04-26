@@ -30,6 +30,7 @@ pub(crate) struct RequestArgs {
 pub(crate) async fn exec(ctx: &Context, args: &RequestArgs) -> Result<(), RequestError> {
     let create_format = match args.storage {
         StorageMode::Plaintext => key::CreateFormat::Plaintext,
+        #[cfg(feature = "keyring")]
         StorageMode::Keyring => key::CreateFormat::Keyring,
         StorageMode::Password => {
             let password = if let Some(path) = &args.storage_password_file {

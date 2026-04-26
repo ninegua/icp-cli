@@ -58,7 +58,7 @@ ic-ed25519 = "0.6.0"
 ic-ledger-types = "0.16.0"
 ic-management-canister-types = { version = "0.7.1" }
 ic-utils = { version = "0.47.0" }
-icp = { path = "crates/icp" }
+icp = { path = "crates/icp", default-features = false }
 icp-canister-interfaces = { path = "crates/icp-canister-interfaces" }
 icp-sync-plugin = { path = "crates/icp-sync-plugin" }
 ic-identity-hsm = "0.47.0"

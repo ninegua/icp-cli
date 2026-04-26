@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::ErrorKind};
 
 use ic_agent::export::Principal;
 use serde::{Deserialize, Serialize};
-use snafu::{Snafu, ensure};
+use snafu::{ensure, Snafu};
 use strum::{Display, EnumString};
 use url::Url;
 
@@ -119,6 +119,7 @@ pub enum IdentitySpec {
         principal: Principal,
     },
     Anonymous,
+    #[cfg(feature = "keyring")]
     Keyring {
         principal: Principal,
         algorithm: IdentityKeyAlgorithm,
@@ -168,6 +169,7 @@ impl IdentitySpec {
         match self {
             IdentitySpec::Pem { principal, .. } => Some(*principal),
             IdentitySpec::Anonymous => Some(Principal::anonymous()),
+            #[cfg(feature = "keyring")]
             IdentitySpec::Keyring { principal, .. } => Some(*principal),
             IdentitySpec::Hsm { principal, .. } => Some(*principal),
             IdentitySpec::WebAuth { principal, .. } => Some(*principal),
@@ -187,8 +189,11 @@ pub enum PemFormat {
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum DelegationKeyStorage {
+    #[cfg(feature = "keyring")]
     Keyring,
-    Pem { format: PemFormat },
+    Pem {
+        format: PemFormat,
+    },
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, EnumString, Display)]

@@ -68,6 +68,7 @@ impl TelemetryData {
 #[serde(rename_all = "kebab-case")]
 pub enum IdentityStorageType {
     Pem,
+    #[cfg(feature = "keyring")]
     Keyring,
     Hsm,
     Anonymous,
@@ -89,6 +90,7 @@ impl From<&IdentitySpec> for IdentityStorageType {
     fn from(spec: &IdentitySpec) -> Self {
         match spec {
             IdentitySpec::Pem { .. } => Self::Pem,
+            #[cfg(feature = "keyring")]
             IdentitySpec::Keyring { .. } => Self::Keyring,
             IdentitySpec::Hsm { .. } => Self::Hsm,
             IdentitySpec::Anonymous => Self::Anonymous,

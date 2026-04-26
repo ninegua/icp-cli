@@ -42,7 +42,7 @@ indexmap = { workspace = true }
 indoc = { workspace = true }
 itertools = { workspace = true }
 k256 = { workspace = true }
-keyring = { workspace = true }
+keyring = { workspace = true, optional = true }
 notify = { workspace = true }
 num-bigint = { workspace = true }
 num-integer = { workspace = true }
@@ -79,3 +79,6 @@ winreg = { workspace = true }
 
 [dev-dependencies]
 jsonschema = { workspace = true }
+
+[features]
+default = [ "keyring" ]

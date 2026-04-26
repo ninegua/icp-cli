@@ -13,6 +13,7 @@ use ic_agent::{
 };
 use ic_ed25519::PrivateKeyFormat;
 use ic_identity_hsm::HardwareIdentity;
+#[cfg(feature = "keyring")]
 use keyring::Entry;
 use pem::Pem;
 use pkcs8::{
@@ -54,7 +55,10 @@ pub enum IdentityKey {
 #[derive(Debug, Clone)]
 pub enum CreateFormat {
     Plaintext,
-    Pbes2 { password: Zeroizing<String> },
+    Pbes2 {
+        password: Zeroizing<String>,
+    },
+    #[cfg(feature = "keyring")]
     Keyring,
 }
 
@@ -102,9 +106,11 @@ pub enum LoadIdentityError {
     #[snafu(transparent)]
     LockError { source: crate::fs::lock::LockError },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to load keyring entry"))]
     LoadEntryError { source: keyring::Error },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to load password from keyring entry"))]
     LoadPasswordFromEntryError { source: keyring::Error },
 
@@ -174,6 +180,7 @@ pub fn load_identity(
             password_func,
             pem_session_duration,
         ),
+        #[cfg(feature = "keyring")]
         IdentitySpec::Keyring { algorithm, .. } => load_keyring_identity(name, algorithm),
         IdentitySpec::Hsm {
             module,
@@ -582,6 +589,7 @@ pub fn create_explicit_pem_session(
     Ok(())
 }
 
+#[cfg(feature = "keyring")]
 fn load_keyring_identity(
     name: &str,
     algorithm: &IdentityKeyAlgorithm,
@@ -671,8 +679,9 @@ fn load_webauth_identity(
         delegation::to_agent_types(&stored_chain).context(DelegationConversionSnafu)?;
 
     let inner: Arc<dyn Identity> = match storage {
-        DelegationKeyStorage::Keyring
-        | DelegationKeyStorage::Pem {
+        #[cfg(feature = "keyring")]
+        DelegationKeyStorage::Keyring => load_plaintext_identity(&doc, algorithm, &origin)?,
+        DelegationKeyStorage::Pem {
             format: PemFormat::Plaintext,
         } => load_plaintext_identity(&doc, algorithm, &origin)?,
         DelegationKeyStorage::Pem {
@@ -727,8 +736,9 @@ pub fn load_webauth_session_public_key(
     let (doc, origin) = load_webauth_session_pem(dirs, name, storage)?;
 
     match storage {
-        DelegationKeyStorage::Keyring
-        | DelegationKeyStorage::Pem {
+        #[cfg(feature = "keyring")]
+        DelegationKeyStorage::Keyring => load_webauth_public_key_plaintext(&doc, algorithm, &origin),
+        DelegationKeyStorage::Pem {
             format: PemFormat::Plaintext,
         } => load_webauth_public_key_plaintext(&doc, algorithm, &origin),
         DelegationKeyStorage::Pem {
@@ -747,6 +757,7 @@ fn load_webauth_session_pem(
     storage: &DelegationKeyStorage,
 ) -> Result<(Pem, PemOrigin), LoadIdentityError> {
     match storage {
+        #[cfg(feature = "keyring")]
         DelegationKeyStorage::Keyring => {
             let username = dlg_keyring_key(name);
             let entry = Entry::new(SERVICE_NAME, &username).context(LoadEntrySnafu)?;
@@ -947,6 +958,7 @@ pub fn create_identity(
             let pem = make_pkcs5_encrypted_pem(&doc, password);
             write_identity(dirs, name, &pem)?;
         }
+        #[cfg(feature = "keyring")]
         CreateFormat::Keyring => {
             let pem = doc
                 .to_pem(PrivateKeyInfo::PEM_LABEL, Default::default())
@@ -973,6 +985,7 @@ pub fn create_identity(
             algorithm,
             principal,
         },
+        #[cfg(feature = "keyring")]
         CreateFormat::Keyring => IdentitySpec::Keyring {
             principal,
             algorithm,
@@ -995,10 +1008,14 @@ pub enum WriteIdentityError {
     #[snafu(transparent)]
     LockError { source: crate::fs::lock::LockError },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to create keyring entry"))]
     CreateEntryError { source: keyring::Error },
+
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to set keyring entry password"))]
     SetEntryPasswordError { source: keyring::Error },
+
     #[cfg(target_os = "linux")]
     #[snafu(display(
         "no keyring available - have you set it up? gnome-keyring must be installed and configured with a default keyring."
@@ -1043,30 +1060,35 @@ pub enum RenameIdentityError {
     #[snafu(display("failed to delete old key file"))]
     DeleteOldKeyFile { source: fs::IoError },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to load keyring entry for identity `{name}`"))]
     LoadKeyringEntry {
         name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to read keyring entry for identity `{name}`"))]
     ReadKeyringEntry {
         name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to create keyring entry for identity `{new_name}`"))]
     CreateKeyringEntry {
         new_name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to set keyring entry password for identity `{new_name}`"))]
     SetKeyringEntryPassword {
         new_name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to delete old keyring entry for identity `{old_name}`"))]
     DeleteKeyringEntry {
         old_name: String,
@@ -1106,9 +1128,12 @@ pub fn rename_identity(
     // Copy key material to new location before updating the list
     enum OldKeyMaterial {
         Pem(PathBuf),
+        #[cfg(feature = "keyring")]
         Keyring(Entry),
+        #[cfg(feature = "keyring")]
         DelegationKeyring(Entry),
         DelegationPem(PathBuf),
+        #[cfg(feature = "keyring")]
         WebAuthKeyringAndDelegation(Entry, PathBuf),
         WebAuthPemAndDelegation(PathBuf, PathBuf),
         None,
@@ -1141,6 +1166,7 @@ pub fn rename_identity(
 
             OldKeyMaterial::Pem(old_path)
         }
+        #[cfg(feature = "keyring")]
         IdentitySpec::Keyring { .. } => {
             // Copy the keyring entry to the new name
             let old_entry = Entry::new(SERVICE_NAME, old_name)
@@ -1166,6 +1192,7 @@ pub fn rename_identity(
             fs::write(&new_delegation, &delegation_contents).context(CopyKeyFileSnafu)?;
 
             match storage {
+                #[cfg(feature = "keyring")]
                 DelegationKeyStorage::Keyring => {
                     let old_entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(old_name))
                         .context(LoadKeyringEntrySnafu { name: old_name })?;
@@ -1196,6 +1223,7 @@ pub fn rename_identity(
             unreachable!("anonymous identity should have been rejected above")
         }
         IdentitySpec::PendingDelegation { storage, .. } => match storage {
+            #[cfg(feature = "keyring")]
             DelegationKeyStorage::Keyring => {
                 let old_entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(old_name))
                     .context(LoadKeyringEntrySnafu { name: old_name })?;
@@ -1226,6 +1254,7 @@ pub fn rename_identity(
             fs::write(&new_delegation, &delegation_contents).context(CopyKeyFileSnafu)?;
 
             match storage {
+                #[cfg(feature = "keyring")]
                 DelegationKeyStorage::Keyring => {
                     let old_entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(old_name))
                         .context(LoadKeyringEntrySnafu { name: old_name })?;
@@ -1266,11 +1295,13 @@ pub fn rename_identity(
         OldKeyMaterial::Pem(old_path) => {
             fs::remove_file(&old_path).context(DeleteOldKeyFileSnafu)?;
         }
+        #[cfg(feature = "keyring")]
         OldKeyMaterial::Keyring(entry) => {
             entry
                 .delete_credential()
                 .context(DeleteKeyringEntrySnafu { old_name })?;
         }
+        #[cfg(feature = "keyring")]
         OldKeyMaterial::DelegationKeyring(old_entry) => {
             old_entry
                 .delete_credential()
@@ -1279,6 +1310,7 @@ pub fn rename_identity(
         OldKeyMaterial::DelegationPem(old_pem) => {
             fs::remove_file(&old_pem).context(DeleteOldKeyFileSnafu)?;
         }
+        #[cfg(feature = "keyring")]
         OldKeyMaterial::WebAuthKeyringAndDelegation(old_entry, old_delegation) => {
             old_entry
                 .delete_credential()
@@ -1317,12 +1349,14 @@ pub enum DeleteIdentityError {
     #[snafu(transparent)]
     DeleteKeyFile { source: fs::IoError },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to load keyring entry for identity `{name}`"))]
     LoadKeyringEntryForDelete {
         name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to delete keyring entry for identity `{name}`"))]
     DeleteKeyringEntryForDelete {
         name: String,
@@ -1370,6 +1404,7 @@ pub fn delete_identity(
             }
             let _ = fs::remove_file(&dirs.delegation_chain_path(name));
         }
+        #[cfg(feature = "keyring")]
         IdentitySpec::Keyring { .. } => {
             // Delete the keyring entry
             let entry =
@@ -1380,6 +1415,7 @@ pub fn delete_identity(
         }
         IdentitySpec::WebAuth { storage, .. } => {
             match storage {
+                #[cfg(feature = "keyring")]
                 DelegationKeyStorage::Keyring => {
                     let entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(name))
                         .context(LoadKeyringEntryForDeleteSnafu { name })?;
@@ -1402,6 +1438,7 @@ pub fn delete_identity(
             unreachable!("anonymous identity should have been rejected above")
         }
         IdentitySpec::PendingDelegation { storage, .. } => match storage {
+            #[cfg(feature = "keyring")]
             DelegationKeyStorage::Keyring => {
                 let entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(name))
                     .context(LoadKeyringEntryForDeleteSnafu { name })?;
@@ -1416,6 +1453,7 @@ pub fn delete_identity(
         },
         IdentitySpec::Delegation { storage, .. } => {
             match storage {
+                #[cfg(feature = "keyring")]
                 DelegationKeyStorage::Keyring => {
                     let entry = Entry::new(SERVICE_NAME, &dlg_keyring_key(name))
                         .context(LoadKeyringEntryForDeleteSnafu { name })?;
@@ -1499,9 +1537,11 @@ pub enum CreatePendingDelegationError {
     #[snafu(display("identity `{name}` already exists"))]
     DlgNameTaken { name: String },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to create session key keyring entry"))]
     DlgCreateKeyringEntry { source: keyring::Error },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to store session key in keyring"))]
     DlgSetKeyringEntryPassword { source: keyring::Error },
 
@@ -1596,6 +1636,7 @@ pub fn link_webauth_identity(
     };
 
     let webauth_storage = match &create_format {
+        #[cfg(feature = "keyring")]
         CreateFormat::Keyring => {
             let pem = doc
                 .to_pem(PrivateKeyInfo::PEM_LABEL, Default::default())
@@ -1730,6 +1771,7 @@ pub fn create_pending_delegation(
     let doc = key.to_pkcs8_der().expect("infallible PKI encoding");
 
     let storage = match &create_format {
+        #[cfg(feature = "keyring")]
         CreateFormat::Keyring => {
             let pem = doc
                 .to_pem(PrivateKeyInfo::PEM_LABEL, Default::default())
@@ -1917,12 +1959,14 @@ pub enum ExportIdentityError {
     #[snafu(display("failed to read password: {message}"))]
     GetPasswordForExport { message: String },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to load keyring entry for identity `{name}`"))]
     LoadKeyringEntryForExport {
         name: String,
         source: keyring::Error,
     },
 
+    #[cfg(feature = "keyring")]
     #[snafu(display("failed to read keyring entry for identity `{name}`"))]
     ReadKeyringEntryForExport {
         name: String,
@@ -1993,6 +2037,7 @@ pub fn export_identity(
                 }
             }
         }
+        #[cfg(feature = "keyring")]
         IdentitySpec::Keyring { .. } => {
             // Read from keyring (already stored as plaintext PEM)
             let entry =

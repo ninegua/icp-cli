@@ -32,10 +32,19 @@ pub(crate) enum Command {
     Rename(rename::RenameArgs),
 }
 
-#[derive(Debug, Clone, ValueEnum, Default)]
+#[derive(Debug, Clone, ValueEnum)]
 enum StorageMode {
     Plaintext,
-    #[default]
+    #[cfg(feature = "keyring")]
     Keyring,
     Password,
+}
+
+impl Default for StorageMode {
+    fn default() -> Self {
+        #[cfg(feature = "keyring")]
+        return Self::Keyring;
+        #[cfg(not(feature = "keyring"))]
+        return Self::Password;
+    }
 }

@@ -21,6 +21,7 @@ use crate::{
 
 pub mod delegation;
 pub mod key;
+#[cfg(feature = "keyring")]
 pub mod keyring_mock;
 pub mod manifest;
 pub mod seed;

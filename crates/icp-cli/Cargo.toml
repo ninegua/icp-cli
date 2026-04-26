@@ -110,3 +110,7 @@ sha2.workspace = true
 # explicitly opt-in to distribution via `dist`
 [package.metadata.dist]
 dist = true
+
+[features]
+default = [ "keyring" ]
+keyring = [ "icp/keyring" ]

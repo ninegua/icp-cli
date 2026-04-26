@@ -70,6 +70,7 @@ pub(crate) struct ImportArgs {
 pub(crate) async fn exec(ctx: &Context, args: &ImportArgs) -> Result<(), anyhow::Error> {
     let format = match args.storage {
         StorageMode::Plaintext => CreateFormat::Plaintext,
+        #[cfg(feature = "keyring")]
         StorageMode::Keyring => CreateFormat::Keyring,
         StorageMode::Password => {
             let password = if let Some(path) = &args.storage_password_file {

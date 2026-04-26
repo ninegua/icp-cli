@@ -68,6 +68,7 @@ pub(crate) async fn exec(ctx: &Context, args: &NewArgs) -> Result<(), anyhow::Er
     );
     let format = match args.storage {
         StorageMode::Plaintext => CreateFormat::Plaintext,
+        #[cfg(feature = "keyring")]
         StorageMode::Keyring => CreateFormat::Keyring,
         StorageMode::Password => {
             let password = if let Some(path) = &args.storage_password_file {

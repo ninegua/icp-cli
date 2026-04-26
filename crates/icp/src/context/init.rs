@@ -120,6 +120,7 @@ pub fn initialize(
         pem_session_duration,
         telemetry_data.clone(),
     ));
+    #[cfg(feature = "keyring")]
     if let Ok(mockdir) = std::env::var("ICP_CLI_KEYRING_MOCK_DIR") {
         keyring::set_default_credential_builder(Box::new(
             crate::identity::keyring_mock::MockKeyring {
